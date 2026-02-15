@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stage Queue | Karaoke Playlist Builder</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="backdrop">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+    </div>
+
+    <main class="app">
+      <header class="hero">
+        <p class="kicker">Karaoke Night Planner</p>
+        <h1>Build your stage queue, then discover your next song.</h1>
+        <p class="subtitle">
+          Add songs to your playlist and we will suggest other tracks that match
+          your vibe.
+        </p>
+      </header>
+
+      <section class="summary card">
+        <div>
+          <p class="label">Songs in playlist</p>
+          <p class="value" id="songCount">0</p>
+        </div>
+        <div>
+          <p class="label">Estimated sing time</p>
+          <p class="value" id="totalMinutes">0 min</p>
+        </div>
+        <div>
+          <p class="label">Current mood</p>
+          <p class="value" id="dominantGenre">Pick your first song</p>
+        </div>
+      </section>
+
+      <section class="layout">
+        <section class="card panel">
+          <div class="panel-header">
+            <h2>Song Library</h2>
+          </div>
+
+          <form class="filters" id="filterForm">
+            <label>
+              Search
+              <input
+                type="search"
+                id="searchInput"
+                placeholder="Song, artist, or vibe"
+              />
+            </label>
+
+            <label>
+              Genre
+              <select id="genreFilter">
+                <option value="">All</option>
+              </select>
+            </label>
+
+            <label>
+              Vocal range
+              <select id="rangeFilter">
+                <option value="">All</option>
+                <option value="Low">Low</option>
+                <option value="Mid">Mid</option>
+                <option value="High">High</option>
+              </select>
+            </label>
+          </form>
+
+          <ul class="song-list" id="libraryList" aria-live="polite"></ul>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-header">
+            <h2>Your Playlist</h2>
+            <button class="btn subtle" id="clearPlaylistBtn" type="button">
+              Clear
+            </button>
+          </div>
+          <ul class="song-list playlist" id="playlistList" aria-live="polite"></ul>
+        </section>
+
+        <section class="card panel">
+          <div class="panel-header">
+            <h2>Suggestions</h2>
+            <button class="btn accent" id="tryTopPickBtn" type="button">
+              Add Top Pick
+            </button>
+          </div>
+          <ul class="song-list" id="suggestionList" aria-live="polite"></ul>
+        </section>
+      </section>
+    </main>
+
+    <template id="emptyPlaylistTemplate">
+      <li class="empty-state">
+        Add songs from the library to start building your set list.
+      </li>
+    </template>
+
+    <template id="emptySuggestionsTemplate">
+      <li class="empty-state">
+        Suggestions will appear once you add at least one playlist song.
+      </li>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
