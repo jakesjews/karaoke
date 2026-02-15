@@ -11,6 +11,7 @@ Small static web app for building a karaoke playlist and getting song suggestion
 - Get recommendation cards from a style-based matching engine.
 - Save playlist state in `localStorage`.
 - Mobile-friendly layout tuned for touch controls.
+- Mobile tab switcher and incremental "show more" loading for large lists.
 
 ## Run locally
 

@@ -43,8 +43,39 @@
         </div>
       </section>
 
+      <nav
+        class="mobile-panel-nav card"
+        id="mobilePanelNav"
+        aria-label="Mobile panel switcher"
+      >
+        <button
+          class="mobile-panel-btn is-active"
+          type="button"
+          data-panel-target="library"
+          aria-pressed="true"
+        >
+          Library
+        </button>
+        <button
+          class="mobile-panel-btn"
+          type="button"
+          data-panel-target="playlist"
+          aria-pressed="false"
+        >
+          Playlist
+        </button>
+        <button
+          class="mobile-panel-btn"
+          type="button"
+          data-panel-target="suggestions"
+          aria-pressed="false"
+        >
+          Suggestions
+        </button>
+      </nav>
+
       <section class="layout">
-        <section class="card panel">
+        <section class="card panel" data-panel="library">
           <div class="panel-header">
             <h2>Song Library</h2>
           </div>
@@ -81,7 +112,7 @@
           <ul class="song-list" id="libraryList" aria-live="polite"></ul>
         </section>
 
-        <section class="card panel">
+        <section class="card panel" data-panel="playlist">
           <div class="panel-header">
             <h2>Your Playlist</h2>
             <button class="btn subtle" id="clearPlaylistBtn" type="button">
@@ -91,7 +122,7 @@
           <ul class="song-list playlist" id="playlistList" aria-live="polite"></ul>
         </section>
 
-        <section class="card panel">
+        <section class="card panel" data-panel="suggestions">
           <div class="panel-header">
             <h2>Suggestions</h2>
             <button class="btn accent" id="tryTopPickBtn" type="button">

@@ -375,7 +375,11 @@ const CORE_SONG_LIBRARY = [
   },
 ];
 
-const MAX_LIBRARY_RENDER_COUNT = 260;
+const MOBILE_MEDIA_QUERY = "(max-width: 900px)";
+const LIBRARY_INITIAL_COUNT_DESKTOP = 180;
+const LIBRARY_INITIAL_COUNT_MOBILE = 45;
+const LIBRARY_BATCH_SIZE_DESKTOP = 120;
+const LIBRARY_BATCH_SIZE_MOBILE = 35;
 const SUGGESTION_LIMIT = 10;
 
 const SONG_LIBRARY = buildSongLibrary();
@@ -387,10 +391,17 @@ const state = {
   genre: "",
   range: "",
   playlistIds: [],
+  activePanel: "library",
+  libraryVisibleCount: getLibraryInitialCount(),
 };
 
 const songById = new Map(SONG_LIBRARY.map((song) => [song.id, song]));
 
+const mobilePanelNav = document.querySelector("#mobilePanelNav");
+const mobilePanelButtons = Array.from(
+  document.querySelectorAll("[data-panel-target]")
+);
+const panels = Array.from(document.querySelectorAll(".panel[data-panel]"));
 const searchInput = document.querySelector("#searchInput");
 const genreFilter = document.querySelector("#genreFilter");
 const rangeFilter = document.querySelector("#rangeFilter");
@@ -509,7 +520,24 @@ function createSongId(input) {
     .slice(0, 90);
 }
 
+function isMobileView() {
+  return window.matchMedia(MOBILE_MEDIA_QUERY).matches;
+}
+
+function getLibraryInitialCount() {
+  return isMobileView() ? LIBRARY_INITIAL_COUNT_MOBILE : LIBRARY_INITIAL_COUNT_DESKTOP;
+}
+
+function getLibraryBatchSize() {
+  return isMobileView() ? LIBRARY_BATCH_SIZE_MOBILE : LIBRARY_BATCH_SIZE_DESKTOP;
+}
+
+function resetLibraryWindow() {
+  state.libraryVisibleCount = getLibraryInitialCount();
+}
+
 function init() {
+  resetLibraryWindow();
   hydratePlaylist();
   populateGenreFilter();
   bindEvents();
@@ -537,16 +565,19 @@ function persistPlaylist() {
 function bindEvents() {
   searchInput.addEventListener("input", (event) => {
     state.search = event.target.value.trim().toLowerCase();
+    resetLibraryWindow();
     renderLibrary();
   });
 
   genreFilter.addEventListener("change", (event) => {
     state.genre = event.target.value;
+    resetLibraryWindow();
     renderLibrary();
   });
 
   rangeFilter.addEventListener("change", (event) => {
     state.range = event.target.value;
+    resetLibraryWindow();
     renderLibrary();
   });
 
@@ -561,6 +592,25 @@ function bindEvents() {
     if (!topPick) return;
     addToPlaylist(topPick.id);
   });
+
+  mobilePanelButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      state.activePanel = button.dataset.panelTarget;
+      renderPanelVisibility();
+    });
+  });
+
+  const mediaQueryList = window.matchMedia(MOBILE_MEDIA_QUERY);
+  const onViewportChange = () => {
+    resetLibraryWindow();
+    render();
+  };
+
+  if (typeof mediaQueryList.addEventListener === "function") {
+    mediaQueryList.addEventListener("change", onViewportChange);
+  } else if (typeof mediaQueryList.addListener === "function") {
+    mediaQueryList.addListener(onViewportChange);
+  }
 }
 
 function populateGenreFilter() {
@@ -578,11 +628,31 @@ function render() {
   renderPlaylist();
   renderSuggestions();
   renderSummary();
+  renderPanelVisibility();
+}
+
+function renderPanelVisibility() {
+  const mobile = isMobileView();
+
+  if (!mobilePanelNav) return;
+
+  mobilePanelNav.hidden = !mobile;
+
+  panels.forEach((panel) => {
+    const shouldShow = !mobile || panel.dataset.panel === state.activePanel;
+    panel.classList.toggle("is-mobile-hidden", !shouldShow);
+  });
+
+  mobilePanelButtons.forEach((button) => {
+    const isActive = button.dataset.panelTarget === state.activePanel;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
 }
 
 function renderLibrary() {
   const songs = getFilteredLibrary();
-  const visibleSongs = songs.slice(0, MAX_LIBRARY_RENDER_COUNT);
+  const visibleSongs = songs.slice(0, state.libraryVisibleCount);
   libraryList.innerHTML = "";
   catalogMeta.textContent = `${songs.length.toLocaleString()} matches • ${SONG_LIBRARY.length.toLocaleString()} total options`;
 
@@ -607,10 +677,28 @@ function renderLibrary() {
 
   libraryList.append(fragment);
 
-  if (songs.length > MAX_LIBRARY_RENDER_COUNT) {
+  if (songs.length > state.libraryVisibleCount) {
+    const remainingCount = songs.length - state.libraryVisibleCount;
+    const loadCount = Math.min(remainingCount, getLibraryBatchSize());
+
+    const loadMoreItem = document.createElement("li");
+    loadMoreItem.className = "load-more-item";
+
+    const loadMoreButton = document.createElement("button");
+    loadMoreButton.type = "button";
+    loadMoreButton.className = "btn accent load-more-btn";
+    loadMoreButton.textContent = `Show ${loadCount.toLocaleString()} more songs`;
+    loadMoreButton.addEventListener("click", () => {
+      state.libraryVisibleCount += getLibraryBatchSize();
+      renderLibrary();
+    });
+
+    loadMoreItem.append(loadMoreButton);
+    libraryList.append(loadMoreItem);
+
     const limited = document.createElement("li");
     limited.className = "empty-state";
-    limited.textContent = `Showing first ${MAX_LIBRARY_RENDER_COUNT.toLocaleString()} matches. Add a filter or search to narrow results.`;
+    limited.textContent = `Showing ${state.libraryVisibleCount.toLocaleString()} of ${songs.length.toLocaleString()} matches.`;
     libraryList.append(limited);
   }
 }
