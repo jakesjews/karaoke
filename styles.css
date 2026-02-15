@@ -159,6 +159,12 @@ h2 {
   padding: 1rem 1rem 0.6rem;
 }
 
+.catalog-meta {
+  margin: 0 1rem 0.8rem;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .filters {
   display: grid;
   grid-template-columns: 1fr;
@@ -333,5 +339,48 @@ button:focus-visible {
 
   h2 {
     font-size: 1.68rem;
+  }
+
+  .panel-header {
+    padding: 0.9rem 0.9rem 0.5rem;
+  }
+
+  .catalog-meta {
+    margin: 0 0.9rem 0.7rem;
+  }
+
+  .filters {
+    padding: 0 0.9rem 0.75rem;
+  }
+
+  .song-list {
+    padding: 0.35rem 0.9rem 0.9rem;
+  }
+
+  .song-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+  }
+
+  .song-main .btn {
+    width: 100%;
+    min-height: 2.45rem;
+  }
+
+  .playlist-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .playlist-controls .btn {
+    width: 100%;
+    min-height: 2.35rem;
+  }
+
+  input,
+  select {
+    min-height: 2.5rem;
   }
 }

@@ -1,4 +1,4 @@
-const SONG_LIBRARY = [
+const CORE_SONG_LIBRARY = [
   {
     id: "sweet-caroline",
     title: "Sweet Caroline",
@@ -375,6 +375,11 @@ const SONG_LIBRARY = [
   },
 ];
 
+const MAX_LIBRARY_RENDER_COUNT = 260;
+const SUGGESTION_LIMIT = 10;
+
+const SONG_LIBRARY = buildSongLibrary();
+
 const STORAGE_KEY = "stage-queue-playlist-v1";
 
 const state = {
@@ -389,6 +394,7 @@ const songById = new Map(SONG_LIBRARY.map((song) => [song.id, song]));
 const searchInput = document.querySelector("#searchInput");
 const genreFilter = document.querySelector("#genreFilter");
 const rangeFilter = document.querySelector("#rangeFilter");
+const catalogMeta = document.querySelector("#catalogMeta");
 const libraryList = document.querySelector("#libraryList");
 const playlistList = document.querySelector("#playlistList");
 const suggestionList = document.querySelector("#suggestionList");
@@ -401,6 +407,107 @@ const emptyPlaylistTemplate = document.querySelector("#emptyPlaylistTemplate");
 const emptySuggestionsTemplate = document.querySelector(
   "#emptySuggestionsTemplate"
 );
+
+function buildSongLibrary() {
+  const massiveCatalog =
+    typeof MASSIVE_SONG_LIBRARY === "undefined" ? [] : MASSIVE_SONG_LIBRARY;
+
+  const merged = [...CORE_SONG_LIBRARY, ...massiveCatalog];
+  const deduped = new Map();
+
+  merged.forEach((rawSong, index) => {
+    const song = normalizeSong(rawSong, index);
+    if (!song) return;
+
+    const dedupeKey = `${canonicalizeTitle(song.title)}::${song.artist.toLowerCase()}`;
+    if (!deduped.has(dedupeKey)) {
+      deduped.set(dedupeKey, song);
+    }
+  });
+
+  return [...deduped.values()].sort((a, b) => {
+    const titleCompare = a.title.localeCompare(b.title);
+    if (titleCompare !== 0) return titleCompare;
+    return a.artist.localeCompare(b.artist);
+  });
+}
+
+function normalizeSong(song, index) {
+  if (!song || typeof song !== "object") return null;
+
+  const title = String(song.title || "").trim();
+  const artist = String(song.artist || "").trim();
+  if (!title || !artist) return null;
+  if (!isLikelyKaraokeOption(title, artist)) return null;
+
+  const normalizedTags = Array.isArray(song.tags)
+    ? song.tags
+        .map((tag) => String(tag || "").trim().toLowerCase())
+        .filter(Boolean)
+    : [];
+
+  const energy = clampNumber(Number(song.energy) || 3, 1, 5);
+  const durationMin = clampNumber(Number(song.durationMin) || 3, 2, 7);
+
+  return {
+    id: String(song.id || createSongId(`${title}-${artist}-${index}`)),
+    title,
+    artist,
+    genre: String(song.genre || "Pop"),
+    decade: String(song.decade || "2000s"),
+    energy,
+    range: normalizeRange(song.range),
+    durationMin,
+    tags: normalizedTags.length ? [...new Set(normalizedTags)].slice(0, 6) : ["crowd"],
+  };
+}
+
+function normalizeRange(rangeValue) {
+  const value = String(rangeValue || "").toLowerCase();
+  if (value === "low") return "Low";
+  if (value === "high") return "High";
+  return "Mid";
+}
+
+function canonicalizeTitle(title) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/\(([^)]*(version|remaster|remastered|mono|stereo|edit|mix|live)[^)]*)\)/gi, "")
+    .replace(/\[([^\]]*(version|remaster|remastered|mono|stereo|edit|mix|live)[^\]]*)\]/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyKaraokeOption(title, artist) {
+  const text = `${title} ${artist}`.toLowerCase();
+  const blockedPatterns = [
+    /\bkidz bop\b/,
+    /\bmother goose\b/,
+    /\blullaby\b/,
+    /\bworkout\b/,
+    /\bcrossfit\b/,
+    /\bmeditation\b/,
+    /\bsleep sounds?\b/,
+    /\binstrumental\b/,
+    /\bbacking track\b/,
+  ];
+
+  if (artist.toLowerCase() === "various artists") return false;
+
+  return !blockedPatterns.some((pattern) => pattern.test(text));
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function createSongId(input) {
+  return String(input)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 90);
+}
 
 function init() {
   hydratePlaylist();
@@ -475,9 +582,11 @@ function render() {
 
 function renderLibrary() {
   const songs = getFilteredLibrary();
+  const visibleSongs = songs.slice(0, MAX_LIBRARY_RENDER_COUNT);
   libraryList.innerHTML = "";
+  catalogMeta.textContent = `${songs.length.toLocaleString()} matches • ${SONG_LIBRARY.length.toLocaleString()} total options`;
 
-  if (!songs.length) {
+  if (!visibleSongs.length) {
     const empty = document.createElement("li");
     empty.className = "empty-state";
     empty.textContent = "No matching songs. Try removing one filter.";
@@ -486,7 +595,7 @@ function renderLibrary() {
   }
 
   const fragment = document.createDocumentFragment();
-  songs.forEach((song) => {
+  visibleSongs.forEach((song) => {
     const inPlaylist = state.playlistIds.includes(song.id);
     const item = createSongItem(song, {
       actionLabel: inPlaylist ? "Added" : "Add",
@@ -497,6 +606,13 @@ function renderLibrary() {
   });
 
   libraryList.append(fragment);
+
+  if (songs.length > MAX_LIBRARY_RENDER_COUNT) {
+    const limited = document.createElement("li");
+    limited.className = "empty-state";
+    limited.textContent = `Showing first ${MAX_LIBRARY_RENDER_COUNT.toLocaleString()} matches. Add a filter or search to narrow results.`;
+    libraryList.append(limited);
+  }
 }
 
 function renderPlaylist() {
@@ -589,68 +705,173 @@ function getSuggestions() {
   if (!playlistSongs.length) {
     return candidates
       .slice()
-      .sort((a, b) => b.energy - a.energy)
-      .slice(0, 6)
-      .map((song) => ({ ...song, reason: "Strong crowd reaction pick" }));
+      .sort((a, b) => getSeedSuggestionScore(b) - getSeedSuggestionScore(a))
+      .slice(0, SUGGESTION_LIMIT)
+      .map((song) => ({ ...song, reason: "Crowd-friendly opener" }));
   }
 
-  const genreCounts = countBy(playlistSongs, "genre");
-  const decadeCounts = countBy(playlistSongs, "decade");
   const artists = new Set(playlistSongs.map((song) => song.artist));
+  const genreAffinity = buildAffinityMap(playlistSongs, "genre");
+  const decadeAffinity = buildAffinityMap(playlistSongs, "decade");
+  const rangeAffinity = buildAffinityMap(playlistSongs, "range");
+  const tagAffinity = buildTagAffinity(playlistSongs);
   const averageEnergy =
     playlistSongs.reduce((sum, song) => sum + song.energy, 0) / playlistSongs.length;
-
-  const topGenre = getTopEntry(genreCounts)?.key;
-  const topDecade = getTopEntry(decadeCounts)?.key;
+  const averageDuration =
+    playlistSongs.reduce((sum, song) => sum + song.durationMin, 0) / playlistSongs.length;
 
   return candidates
     .map((candidate) => {
-      let score = 0;
-      const reasons = [];
+      const nearestMatches = playlistSongs
+        .map((song) => ({
+          song,
+          similarity: calculateSongSimilarity(candidate, song),
+        }))
+        .sort((a, b) => b.similarity - a.similarity);
 
-      if (topGenre && candidate.genre === topGenre) {
-        score += 3;
-        reasons.push(`Matches your ${topGenre} streak`);
-      } else if (playlistSongs.length >= 3) {
-        score += 1.4;
-        reasons.push("Adds style variety");
-      }
+      const closestMatch = nearestMatches[0];
+      const neighborhoodScore =
+        nearestMatches
+          .slice(0, Math.min(3, nearestMatches.length))
+          .reduce((sum, match) => sum + match.similarity, 0) /
+        Math.max(1, Math.min(3, nearestMatches.length));
 
-      const energyDistance = Math.abs(candidate.energy - averageEnergy);
-      if (energyDistance <= 1) {
-        score += 2.1;
-        reasons.push("Fits your current energy level");
-      } else if (energyDistance <= 2) {
-        score += 0.8;
-      }
+      const genreScore = genreAffinity.get(candidate.genre) || 0;
+      const decadeScore = decadeAffinity.get(candidate.decade) || 0;
+      const rangeScore = rangeAffinity.get(candidate.range) || 0;
+      const tagScore = getTagMatchScore(candidate.tags, tagAffinity);
+      const energyScore = 1 - Math.min(Math.abs(candidate.energy - averageEnergy), 4) / 4;
+      const durationScore =
+        1 - Math.min(Math.abs(candidate.durationMin - averageDuration), 4) / 4;
+      const noveltyScore = artists.has(candidate.artist) ? -0.45 : 0.5;
+      const crowdBoost = candidate.tags.includes("crowd") ? 0.14 : 0;
 
-      if (topDecade && candidate.decade === topDecade) {
-        score += 1.1;
-        reasons.push(`Keeps the ${topDecade} vibe`);
-      }
-
-      if (artists.has(candidate.artist)) {
-        score -= 1.2;
-      } else {
-        score += 1;
-        reasons.push("Brings in a fresh artist");
-      }
-
-      if (candidate.tags.includes("crowd")) {
-        score += 0.9;
-      }
-      if (candidate.tags.includes("duet")) {
-        score += 0.4;
-      }
+      const score =
+        neighborhoodScore * 4.3 +
+        genreScore * 2.1 +
+        decadeScore * 0.8 +
+        rangeScore * 0.9 +
+        tagScore * 1.8 +
+        energyScore * 1.6 +
+        durationScore * 0.55 +
+        noveltyScore +
+        crowdBoost;
 
       return {
         ...candidate,
         score,
-        reason: reasons.slice(0, 2).join(" | ") || "Good fit for this set",
+        reason: buildRecommendationReason({
+          candidate,
+          closestMatch,
+          genreScore,
+          tagScore,
+          energyScore,
+          noveltyScore,
+        }),
       };
     })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
+    .slice(0, SUGGESTION_LIMIT);
+}
+
+function getSeedSuggestionScore(song) {
+  let score = song.energy * 0.75;
+  if (song.tags.includes("crowd")) score += 1.2;
+  if (song.tags.includes("singalong")) score += 1;
+  if (song.tags.includes("dance")) score += 0.7;
+  if (song.tags.includes("anthem")) score += 0.8;
+  return score;
+}
+
+function buildAffinityMap(items, key) {
+  const counts = countBy(items, key);
+  const map = new Map();
+  counts.forEach((count, value) => {
+    map.set(value, count / items.length);
+  });
+  return map;
+}
+
+function buildTagAffinity(items) {
+  const counts = new Map();
+  items.forEach((item) => {
+    item.tags.forEach((tag) => {
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    });
+  });
+
+  const affinity = new Map();
+  counts.forEach((count, tag) => {
+    affinity.set(tag, count / items.length);
+  });
+  return affinity;
+}
+
+function getTagMatchScore(tags, tagAffinity) {
+  if (!tags.length) return 0;
+  return tags.reduce((sum, tag) => sum + (tagAffinity.get(tag) || 0), 0) / tags.length;
+}
+
+function calculateSongSimilarity(songA, songB) {
+  const genreScore = songA.genre === songB.genre ? 1 : 0;
+  const decadeScore = songA.decade === songB.decade ? 1 : 0;
+  const rangeScore = songA.range === songB.range ? 1 : 0;
+  const energyScore = 1 - Math.min(Math.abs(songA.energy - songB.energy), 4) / 4;
+  const durationScore =
+    1 - Math.min(Math.abs(songA.durationMin - songB.durationMin), 4) / 4;
+  const tagScore = getJaccardScore(songA.tags, songB.tags);
+
+  return (
+    genreScore * 0.32 +
+    decadeScore * 0.12 +
+    rangeScore * 0.1 +
+    energyScore * 0.2 +
+    durationScore * 0.08 +
+    tagScore * 0.18
+  );
+}
+
+function getJaccardScore(tagsA, tagsB) {
+  const setA = new Set(tagsA);
+  const setB = new Set(tagsB);
+  const union = new Set([...setA, ...setB]);
+  if (!union.size) return 0;
+
+  let shared = 0;
+  setA.forEach((tag) => {
+    if (setB.has(tag)) shared += 1;
+  });
+
+  return shared / union.size;
+}
+
+function buildRecommendationReason({
+  candidate,
+  closestMatch,
+  genreScore,
+  tagScore,
+  energyScore,
+  noveltyScore,
+}) {
+  const reasons = [];
+
+  if (closestMatch && closestMatch.similarity >= 0.74) {
+    reasons.push(`Similar style to "${closestMatch.song.title}"`);
+  }
+  if (genreScore >= 0.34) {
+    reasons.push(`Strong ${candidate.genre} match`);
+  }
+  if (tagScore >= 0.28) {
+    reasons.push("Mood and tempo line up");
+  }
+  if (energyScore >= 0.8) {
+    reasons.push("Energy fits your current queue");
+  }
+  if (noveltyScore > 0) {
+    reasons.push("Adds artist variety");
+  }
+
+  return reasons.slice(0, 2).join(" | ") || "Style-compatible recommendation";
 }
 
 function countBy(items, key) {
