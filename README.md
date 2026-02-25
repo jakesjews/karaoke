@@ -9,6 +9,7 @@ Small static web app for building a karaoke playlist and getting song suggestion
 - Search/filter songs by title, artist, genre, and vocal range.
 - Build your playlist with add/remove/reorder controls.
 - Get recommendation cards from a style-based matching engine.
+- Suggestion list uses incremental "show more" pagination (10 at a time).
 - Save playlist state in `localStorage`.
 - Mobile-friendly layout tuned for touch controls.
 - Mobile tab switcher and incremental "show more" loading for large lists.

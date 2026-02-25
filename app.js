@@ -380,7 +380,8 @@ const LIBRARY_INITIAL_COUNT_DESKTOP = 180;
 const LIBRARY_INITIAL_COUNT_MOBILE = 45;
 const LIBRARY_BATCH_SIZE_DESKTOP = 120;
 const LIBRARY_BATCH_SIZE_MOBILE = 35;
-const SUGGESTION_LIMIT = 10;
+const SUGGESTION_INITIAL_COUNT = 10;
+const SUGGESTION_BATCH_SIZE = 10;
 
 const SONG_LIBRARY = buildSongLibrary();
 
@@ -393,6 +394,7 @@ const state = {
   playlistIds: [],
   activePanel: "library",
   libraryVisibleCount: getLibraryInitialCount(),
+  suggestionVisibleCount: SUGGESTION_INITIAL_COUNT,
 };
 
 const songById = new Map(SONG_LIBRARY.map((song) => [song.id, song]));
@@ -536,8 +538,13 @@ function resetLibraryWindow() {
   state.libraryVisibleCount = getLibraryInitialCount();
 }
 
+function resetSuggestionWindow() {
+  state.suggestionVisibleCount = SUGGESTION_INITIAL_COUNT;
+}
+
 function init() {
   resetLibraryWindow();
+  resetSuggestionWindow();
   hydratePlaylist();
   populateGenreFilter();
   bindEvents();
@@ -584,6 +591,7 @@ function bindEvents() {
   clearPlaylistBtn.addEventListener("click", () => {
     state.playlistIds = [];
     persistPlaylist();
+    resetSuggestionWindow();
     render();
   });
 
@@ -727,16 +735,17 @@ function renderPlaylist() {
 
 function renderSuggestions() {
   suggestionList.innerHTML = "";
-  const suggestions = getSuggestions();
-  tryTopPickBtn.disabled = suggestions.length === 0;
+  const allSuggestions = getSuggestions();
+  const visibleSuggestions = allSuggestions.slice(0, state.suggestionVisibleCount);
+  tryTopPickBtn.disabled = allSuggestions.length === 0;
 
-  if (!suggestions.length) {
+  if (!visibleSuggestions.length) {
     suggestionList.append(emptySuggestionsTemplate.content.cloneNode(true));
     return;
   }
 
   const fragment = document.createDocumentFragment();
-  suggestions.forEach((suggestion) => {
+  visibleSuggestions.forEach((suggestion) => {
     const item = createSongItem(suggestion, {
       actionLabel: "Add",
       actionDisabled: state.playlistIds.includes(suggestion.id),
@@ -746,6 +755,31 @@ function renderSuggestions() {
     fragment.append(item);
   });
   suggestionList.append(fragment);
+
+  if (allSuggestions.length > state.suggestionVisibleCount) {
+    const remainingCount = allSuggestions.length - state.suggestionVisibleCount;
+    const loadCount = Math.min(remainingCount, SUGGESTION_BATCH_SIZE);
+
+    const loadMoreItem = document.createElement("li");
+    loadMoreItem.className = "load-more-item";
+
+    const loadMoreButton = document.createElement("button");
+    loadMoreButton.type = "button";
+    loadMoreButton.className = "btn accent load-more-btn";
+    loadMoreButton.textContent = `Show ${loadCount.toLocaleString()} more suggestions`;
+    loadMoreButton.addEventListener("click", () => {
+      state.suggestionVisibleCount += SUGGESTION_BATCH_SIZE;
+      renderSuggestions();
+    });
+
+    loadMoreItem.append(loadMoreButton);
+    suggestionList.append(loadMoreItem);
+
+    const limited = document.createElement("li");
+    limited.className = "empty-state";
+    limited.textContent = `Showing ${state.suggestionVisibleCount.toLocaleString()} of ${allSuggestions.length.toLocaleString()} suggestions.`;
+    suggestionList.append(limited);
+  }
 }
 
 function renderSummary() {
@@ -794,7 +828,6 @@ function getSuggestions() {
     return candidates
       .slice()
       .sort((a, b) => getSeedSuggestionScore(b) - getSeedSuggestionScore(a))
-      .slice(0, SUGGESTION_LIMIT)
       .map((song) => ({ ...song, reason: "Crowd-friendly opener" }));
   }
 
@@ -858,8 +891,7 @@ function getSuggestions() {
         }),
       };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, SUGGESTION_LIMIT);
+    .sort((a, b) => b.score - a.score);
 }
 
 function getSeedSuggestionScore(song) {
@@ -985,12 +1017,14 @@ function addToPlaylist(songId) {
   if (state.playlistIds.includes(songId)) return;
   state.playlistIds.push(songId);
   persistPlaylist();
+  resetSuggestionWindow();
   render();
 }
 
 function removeFromPlaylist(songId) {
   state.playlistIds = state.playlistIds.filter((id) => id !== songId);
   persistPlaylist();
+  resetSuggestionWindow();
   render();
 }
 
@@ -1002,6 +1036,7 @@ function moveInPlaylist(index, direction) {
     state.playlistIds[index],
   ];
   persistPlaylist();
+  resetSuggestionWindow();
   render();
 }
 
